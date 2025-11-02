@@ -1,0 +1,10 @@
+{
+    "files.associations": {
+        "*.txt": "plaintext",
+        "cstddef": "cpp",
+        "xtr1common": "cpp",
+        "type_traits": "cpp",
+        "iostream": "cpp",
+        "cmath": "cpp"
+    }
+}
