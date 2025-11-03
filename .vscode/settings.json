@@ -5,6 +5,8 @@
         "xtr1common": "cpp",
         "type_traits": "cpp",
         "iostream": "cpp",
-        "cmath": "cpp"
+        "cmath": "cpp",
+        "xlocale": "cpp",
+        "xstring": "cpp"
     }
 }

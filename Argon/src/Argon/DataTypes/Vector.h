@@ -4,7 +4,6 @@
 #include "ArgonSIMD.h"
 
 #include <cstddef>
-#include <type_traits>
 #include <initializer_list>
 #include <iostream>
 #include <cmath>
@@ -27,13 +26,13 @@ namespace argon
         #endif
 
         #ifdef ARGON_SIMD_ENABLED
-        inline
+        constexpr
         Vector() 
         {
             for (size_t i{}; i < SIMDPadding; ++i)
                 items[i] = _T{0};
         }
-        inline
+        constexpr
         Vector(std::initializer_list<_T> values)
         {
             size_t i{};
@@ -132,11 +131,53 @@ namespace argon
             return (_T)sqrt(sum);
         }
 
+        inline _T
+        lengthSquared()
+        const
+        {
+            _T sum{};
+            #ifdef ARGON_SIMD_ENABLED
+            vec_length_simd(*this, sum);
+            #else
+            for (size_t i{}; i < _l; ++i)
+                sum += items[i] * items[i];
+            #endif
+            return sum;
+        }
+
+        inline void
+        Normalize()
+        const
+        {
+            _T len = this->length();
+            #ifdef ARGON_SIMD_ENABLED
+            vec_normalize_simd(*this, len);
+            #else
+            for(size_t i{}l i < _l; ++i)
+                items[i] /= len;
+            #endif
+        }
+
+        inline Vector<_T, _l>
+        Normalized()
+        const
+        {
+            _T len = this->length();
+            Vector<_T, _l> ret = *this;
+            #ifdef ARGON_SIMD_ENABLED
+            vec_normalize_simd(ret, len);
+            #else
+            for (size_t i{}; i < _l; ++i)
+                ret[i] /= len;
+            #endif
+            return ret;
+        }
+
     };
 
     template <typename _T, size_t _l>
     inline std::ostream& 
-    operator<<(std::ostream& stream, const Vector<_T, _l>& vec)
+    operator<<(std::ostream& stream, const Vector<_T, _l> &vec)
     {
         stream << "| ";
         for (size_t i{}; i < _l; ++i)
@@ -159,11 +200,131 @@ namespace argon
         return res;
     }
 
+    template<typename _T>
+    inline Vector<_T, 3>
+    Cross(const Vector<_T, 3> &A, const Vector<_T, 3> &B)
+    {
+        Vector<_T, 3> ret;
+        ret[0] = A[1] * B[2] - A[2] * B[1];
+        ret[1] = A[2] * B[0] - A[0] * B[2];
+        ret[2] = A[0] * B[1] - A[1] * B[0];
+        return ret;
+    }
+
+    template <typename _T, size_t _l>
+    inline _T
+    Distance(const Vector<_T, _l> &A, const Vector<_T, _l> &B)
+    {
+        _T res{0};
+        #ifdef ARGON_SIMD_ENABLED
+        vec_distance_simd(A, B, res);
+        #else
+        for (size_t i{}; i < _l; ++i)
+            res += (A[i] - B[i]) * (A[i] - B[i]);
+        #endif
+        return sqrt(res);
+    }
+
+    template<typename _T, size_t _l>
+    inline _T
+    DistanceSquared(const Vector<_T, _l> &A, const Vector<_T, _l> &B)
+    {
+        _T res{0};
+        #ifdef ARGON_SIMD_ENABLED
+        vec_distance_simd(A, B, res);
+        #else
+        for (size_t i{}; i < _l; ++i)
+            res += (A[i] - B[i]) * (A[i] - B[i]);
+        #endif
+        return res;
+    }
+
+    template<typename _T, size_t _l>
+    inline Vector<_T, _l>
+    Lerp(const Vector<_T, _l> &A, const Vector<_T, _l> &B, _T t)
+    {
+        Vector<_T, _l> ret;
+        #ifdef ARGON_SIMD_ENABLED
+        vec_lerp_simd(A, B, t, ret);
+        #else
+        for (size_t i{}; i < _l; ++i)
+            ret[i] = A[i] + (B[i] - A[i]) * t;
+        #endif
+        return ret;
+    }
+
+    template<typename _T, size_t _l>
+    inline Vector<_T, _l>
+    Reflect(const Vector<_T, _l> &vec, const Vector<_T, _l> &normal)
+    {
+        Vector<_T, _l> ret;
+        #ifdef ARGON_SIMD_ENABLED
+        vec_reflect_simd(vec, normal, ret);
+        #else
+        for (size_t i{}; i < _l; ++i)
+            ret[i] = vec[i] - 2 * (vec[i] * normal[i]) * normal[i];
+        #endif
+        return ret;
+    }
+
 #ifdef ARGON_SIMD_ENABLED
 
     template<size_t _l>
     inline void
-    vec_dot_simd(const Vector<float, _l>& left, const Vector<float, _l>& right, float& ret)
+    vec_reflect_simd(const Vector<float, _l> &vec, const Vector<float, _l> &normal, Vector<float, _l> &ret)
+    {
+        simd::__m_float _vec = _mm_load_float(vec.items),
+                        _nor = _mm_load_float(normal.items),
+                        _2 = _mm_set1_ps(2),
+                        _res;
+        _res = _mm_mul_float(_vec, _nor); // (a * n)
+        _res = _mm_mul_float(_res, _nor); // (a * n) * n
+        _res = _mm_mul_float(_res, _2);   // 2 * (a * n) * n
+        _res = _mm_sub_float(_vec, _res); // a - 2 * (a * n) * n
+        _mm_store_float(ret.items, _res);
+    }
+
+    template <size_t _l>
+    inline void
+    vec_lerp_simd(const Vector<float, _l> &A, const Vector<float, _l> &B, float t, Vector<float, _l> &ret)
+    {
+        simd::__m_float _A = _mm_load_float(A.items),
+                        _B = _mm_load_float(B.items),
+                        _t = _mm_set1_ps(t),
+                        _res;
+        _res = _mm_sub_float(_B, _A);
+        _res = _mm_add_float(_res, _A);
+        _res = _mm_mul_float(_res, _t);
+        _mm_store_float(ret.items, _res);
+    }
+
+    template<size_t _l>
+    inline void
+    vec_distance_simd(const Vector<float, _l> &A, const Vector<float, _l> &B, float &res)
+    {
+        simd::__m_float _A = _mm_load_float(A.items),
+                        _B = _mm_load_float(B.items),
+                        _res;
+        _res = _mm_sub_float(_A, _B);
+        _res = _mm_mul_float(_res, _res);
+        _res = _mm_hadd_float(_res, _res);
+        _res = _mm_hadd_float(_res, _res);
+        res = _mm_first_float(_res);
+    }
+
+    template<size_t _l>
+    inline void
+    vec_normalize_simd(Vector<float, _l> &vec, const float len)
+    {
+        simd::__m_float _vec = _mm_load_float(vec.items),
+                        _len = _mm_set1_ps(len);
+        _vec = _mm_div_float(_vec, _len);
+        _mm_store_float(vec.items, _vec);
+    }
+
+    template<size_t _l>
+    inline void
+    vec_dot_simd(const Vector<float, _l> &left, const Vector<float, _l> &right, float &ret)
     {
         simd::__m_float _A = _mm_load_float(left.items),
                         _B = _mm_load_float(right.items),
@@ -176,33 +337,7 @@ namespace argon
 
     template<size_t _l>
     inline void
-    vec_dot_simd(const Vector<double, _l>& left, const Vector<double, _l>& right, double& ret)
-    {
-        simd::__m_double _A = _mm_load_double(left.items),
-                         _B = _mm_load_double(right.items),
-                         _res;
-        #if ARGON_SIMD_SIZE >= 256
-        _res = _mm_mul_double(_A, _B);
-        _res = _mm_hadd_double(_res, _res);
-        _res = _mm256_shuffle_pd(_res, _res, _MM_SHUFFLE(0, 2, 0, 2));
-        _res = _mm_hadd_double(_res, _res);
-        __m128d _lower = _mm_half_double(_res);
-        ret = _mm_first_double(_lower);
-        #else
-        _res = _mm_mul_double(_A, _B);
-        _res = _mm_hadd_double(_res, _res);
-        ret = _mm_first_double(_res);
-        _A = _mm_load_double(&left.items[2]);
-        _B = _mm_load_double(&right.items[2]);
-        _res = _mm_mul_double(_A, _B);
-        _res = _mm_hadd_double(_res, _res);
-        ret += _mm_first_double(_res);
-        #endif
-    }
-
-    template<size_t _l>
-    inline void
-    vec_add_simd(const Vector<float, _l>& left, const Vector<float, _l>& right, Vector<float, _l>& ret)
+    vec_add_simd(const Vector<float, _l> &left, const Vector<float, _l> &right, Vector<float, _l> &ret)
     {
         simd::__m_float _A = _mm_load_float(left.items),
                         _B = _mm_load_float(right.items),
@@ -246,86 +381,6 @@ namespace argon
 
     template<size_t _l>
     inline void
-    vec_add_simd(const Vector<double, _l> &left, const Vector<double, _l> &right, Vector<double, _l> &ret)
-    {
-        simd::__m_double _A = _mm_load_double(left.items),
-                         _B = _mm_load_double(right.items),
-                         _res;
-    #if ARGON_SIMD_SIZE >= 256 // AVX
-        _res = _mm_add_double(_A, _B);
-        _mm_store_double(ret.items, _res);
-    #else // SSE
-        _res = _mm_add_double(_A, _B);
-        _mm_store_double(ret.items, _res);
-        _A = _mm_load_double(&left.items[2]);
-        _B = _mm_load_double(&right.items[2]);
-        _res = _mm_add_double(_A, _B);
-        _mm_store_double(&ret.items[2], _res);
-    #endif
-    }
-
-    template <size_t _l>
-    inline void
-    vec_sub_simd(const Vector<double, _l> &left, const Vector<double, _l> &right, Vector<double, _l> &ret)
-    {
-        simd::__m_double _A = _mm_load_double(left.items),
-                         _B = _mm_load_double(right.items),
-                         _res;
-    #if ARGON_SIMD_SIZE >= 256 // AVX
-        _res = _mm_sub_double(_A, _B);
-        _mm_store_double(ret.items, _res);
-    #else // SSE
-        _res = _mm_sub_double(_A, _B);
-        _mm_store_double(ret.items, _res);
-        _A = _mm_load_double(&left.items[2]);
-        _B = _mm_load_double(&right.items[2]);
-        _res = _mm_sub_double(_A, _B);
-        _mm_store_double(&ret.items[2], _res);
-    #endif
-    }
-
-    template <size_t _l>
-    inline void
-    vec_mul_simd(const Vector<double, _l> &left, const Vector<double, _l> &right, Vector<double, _l> &ret)
-    {
-        simd::__m_double _A = _mm_load_double(left.items),
-                         _B = _mm_load_double(right.items),
-                         _res;
-    #if ARGON_SIMD_SIZE >= 256 // AVX
-        _res = _mm_mul_double(_A, _B);
-        _mm_store_double(ret.items, _res);
-    #else // SSE
-        _res = _mm_mul_double(_A, _B);
-        _mm_store_double(ret.items, _res);
-        _A = _mm_load_double(&left.items[2]);
-        _B = _mm_load_double(&right.items[2]);
-        _res = _mm_mul_double(_A, _B);
-        _mm_store_double(&ret.items[2], _res);
-    #endif
-    }
-
-    template <size_t _l>
-    inline void
-    vec_div_simd(const Vector<double, _l> &left, const Vector<double, _l> &right, Vector<double, _l> &ret)
-    {
-        simd::__m_double _A = _mm_load_double(left.items),
-                         _B = _mm_load_double(right.items),
-                         _res;
-    #if ARGON_SIMD_SIZE >= 256 // AVX
-        _res = _mm_div_double(_A, _B);
-        _mm_store_double(ret.items, _res);
-    #else // SSE
-        _res = _mm_div_double(_A, _B);
-        _mm_store_double(ret.items, _res);
-        _A = _mm_load_double(&left.items[2]);
-        _B = _mm_load_double(&right.items[2]);
-        _res = _mm_div_double(_A, _B);
-        _mm_store_double(&ret.items[2], _res);
-    #endif
-    }
-
-    template<size_t _l>
-    inline void
     vec_length_simd(const Vector<float, _l> &vec, float &ret)
     {
         simd::__m_float _A = _mm_load_float(vec.items);
@@ -335,36 +390,13 @@ namespace argon
         ret = _mm_first_float(_A);
     }
 
-    template<size_t _l>
-    inline void
-    vec_length_simd(const Vector<double, _l> &vec, double &ret)
-    {
-        simd::__m_double _A = _mm_load_double(vec.items);
-        _A = _mm_mul_double(_A, _A);
-        _A = _mm_hadd_double(_A, _A);
-        #if ARGON_SIMD_SIZE >= 256
-        _A = _mm_hadd_double(_A, _A);
-        __m128d _lower = _mm_half_double(_A);
-        ret = _mm_first_double(_lower);
-        #else
-        ret = _mm_first_double(_A);
-        _A = _mm_load_double(&vec.items[2]);
-        _A = _mm_mul_double(_A, _A);
-        _A = _mm_hadd_double(_A, _A);
-        ret += _mm_first_double(_A);
-        #endif
-    }
-
 #endif
 
 
 
-    using vec2f = Vector<float, 2>;
-    using vec3f = Vector<float, 3>;
-    using vec4f = Vector<float, 4>;
-    using vec2d = Vector<double, 2>;
-    using vec3d = Vector<double, 3>;
-    using vec4d = Vector<double, 4>;
+    using vec2 = Vector<float, 2>;
+    using vec3 = Vector<float, 3>;
+    using vec4 = Vector<float, 4>;
 
 }
 

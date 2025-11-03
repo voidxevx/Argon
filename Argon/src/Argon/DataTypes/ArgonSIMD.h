@@ -52,18 +52,6 @@ namespace argon::simd
     #define _mm_hadd_float _mm_hadd_ps
     #define _mm_first_float _mm_cvtss_f32
 
-    #define _mm_add_double _mm256_add_pd
-    #define _mm_sub_double _mm256_sub_pd
-    #define _mm_mul_double _mm256_mul_pd
-    #define _mm_div_double _mm256_div_pd
-    #define _mm_load_double _mm256_load_pd
-    #define _mm_store_double _mm256_store_pd
-
-    #define _mm_hadd_double _mm256_hadd_pd
-    #define _mm_first_double _mm_cvtsd_f64
-    #define _mm_half_double _mm256_castpd256_pd128
-    #define _mm_top_double _mm256_extractf128_pd
-
 #elif ARGON_SIMD_SIZE >= 128
     using __m_float = __m128;
     using __m_double = __m128d;
@@ -81,15 +69,6 @@ namespace argon::simd
     #define _mm_hadd_float _mm_hadd_ps
     #define _mm_first_float _mm_cvtss_f32
 
-    #define _mm_add_double _mm_add_pd
-    #define _mm_sub_double _mm_sub_pd
-    #define _mm_mul_double _mm_mul_pd
-    #define _mm_div_double _mm_div_pd
-    #define _mm_load_double _mm_load_pd
-    #define _mm_store_double _mm_store_pd
-
-    #define _mm_hadd_double _mm_hadd_pd
-    #define _mm_first_double _mm_cvtsd_f64
 
 #endif
     
