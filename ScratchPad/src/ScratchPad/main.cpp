@@ -21,7 +21,8 @@ int main()
     std::cout << std::endl;
 
     argon::Matrix<float, 4, 4> matA = argon::Matrix<float, 4, 4>::Translation(vecA);
-    std::cout << matA << std::endl;
+    argon::Matrix<float, 4, 4> matB = argon::Matrix<float, 4, 4>::Scalar(argon::vec4{2, 2, 3, 1});
+    std::cout << matA * matB << std::endl;
 
     return 0;
 }

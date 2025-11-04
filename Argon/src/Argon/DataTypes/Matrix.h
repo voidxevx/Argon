@@ -53,6 +53,24 @@ namespace argon
             return ret;
         }
 
+        constexpr Matrix<_T, _rows, _cols>
+        operator*(const Matrix<_T, _cols, _rows> &other)
+        const
+        {
+            Matrix<_T, _rows, _cols> ret;
+            matrix_mul(*this, other, ret);
+            return ret;
+        }
+
+        constexpr Vector<_T, _rows>
+        operator*(const Vector<_T, _cols> &other)
+        const
+        {
+            Vector<_T, _rows> ret;
+            vec_transform(*this, other, ret);
+            return ret;
+        }
+
         static constexpr Matrix<_T, _rows, _cols>
         Identity()
         {
@@ -85,7 +103,8 @@ namespace argon
     };
 
     template<typename _T, size_t _rows, size_t _cols>
-    std::ostream &operator<<(std::ostream &stream, const Matrix<_T, _rows, _cols> &mat)
+    inline std::ostream 
+    &operator<<(std::ostream &stream, const Matrix<_T, _rows, _cols> &mat)
     {
         for (size_t col{}; col < _cols; ++col)
         {
@@ -96,6 +115,26 @@ namespace argon
             }
             stream << "| ";
         }
+    }
+
+    template<typename _T, size_t _rows, size_t _cols>
+    inline void
+    matrix_mul(const Matrix<_T, _rows, _cols> &A, const Matrix<_T, _rows, _cols> &B, Matrix<_T, _cols, _rows> &ret)
+    {
+        for (size_t row{}; row < _rows; ++row)
+        {
+            Vector<_T, _cols> c_row = A.GetRow(row);
+            for (size_t col{}; col < _cols; ++col)
+                ret(row, col) = Dot(c_row, B.GetCol(col));
+        }
+    }
+
+    template<typename _T, size_t _rows, size_t _cols>
+    inline void
+    vec_transform(const Matrix<_T, _rows, _cols> &mat, const Vector<_T, _cols> &vec, Vector<_T, _rows> &ret)
+    {
+        for (size_t i{}; i < _rows; ++i)
+            ret[i] = Dot(mat.GetRow(i), vec);
     }
     
 
